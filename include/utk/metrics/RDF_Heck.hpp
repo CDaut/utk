@@ -19,11 +19,13 @@ namespace utk {
         }
 
         template<typename T>
-        std::pair<std::vector<T>, std::vector<int32_t>> compute(const Pointset<T> &points) {
+        std::pair<std::vector<T>, std::vector<T>> compute(const Pointset<T> &points) {
+            constexpr T PI = 3.141592653589793238;
             const int npoints = points.Npts();
 
             std::vector<T> values(this->nbins, 0);
-            std::vector<int32_t> frequencies(this->nbins, 0);
+            std::vector<int32_t> bins(this->nbins, 0);
+            std::vector<T> frequencies(this->nbins, 0);
 
             auto distMetric = toroidal ? &RDF::toricDistance<T> : &RDF::distance<T>;
 
@@ -33,16 +35,17 @@ namespace utk {
                     //calculate which bin this distance goes into
                     int idx = std::floor((dist / maxdist) * static_cast<T>(nbins));
                     if (idx > 0 && idx < nbins)
-                        frequencies[idx]++;
+                        bins[idx]++;
                 }
             }
 
-            //TODO: This probably deals with renormalization. Skip it for now because it is undocumented
-            /*
-            const float scale = npoints * (npoints - 1) / 2 * PI * rdf->dx * rdf->dx;
-            for (int i = 0; i < rdf->size(); ++i)
-                (*rdf)[i] = bins[i] / (scale * (2 * i + 1));
-            */
+            //renormalization
+            const T scale = npoints * (npoints - 1) / 2 * PI * maxdist * maxdist;
+
+            for (int i = 0; i < nbins; ++i) {
+                frequencies[i] = static_cast<T>(bins[i]) / (scale * (2 * i + 1));
+            }
+
 
             //save all the distances to the bins
             T binwidth = maxdist / static_cast<T>(nbins);
