@@ -451,7 +451,7 @@ float Integrate(const Curve &c, float x0, float x1, float *E) {
         T += c[i];
         M += c[i-1];
     }
-    if (E != NULL)
+    if (E != nullptr)
         *E = c.dx * 2.0f * fabs(T-M);
     float a = c.dx*(T+M);
     return negate ? -a : a;

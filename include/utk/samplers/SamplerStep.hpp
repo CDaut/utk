@@ -32,7 +32,7 @@
  */
 #pragma once
 
-#include <Step/common.hh>
+#include "../../../externals/Step/common.hh"
 
 #include <utk/utils/FastPRNG.hpp>
 #include <utk/utils/Pointset.hpp>

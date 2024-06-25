@@ -21,6 +21,7 @@ SET(Samplers
     ForcedRandom
     VanDerCorput
     Step
+    Step_Custom
     SinglePeak
     Penrose
     ProjectiveBlueNoise
