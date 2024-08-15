@@ -30,12 +30,12 @@
  * of the authors and should not be interpreted as representing official policies,
  * either expressed or implied, of the UTK project.
  */
-#include <utk/utils/SamplerArgumentParser.hpp>
-#include <utk/utils/PointsetIO.hpp>
-#include <utk/utils/Pointset.hpp>
-#include <utk/samplers/SamplerStep_Custom.hpp>
-#include <format>
 #include "utk/metrics/RDF_Heck.hpp"
+#include <format>
+#include <utk/samplers/SamplerStep_Custom.hpp>
+#include <utk/utils/Pointset.hpp>
+#include <utk/utils/PointsetIO.hpp>
+#include <utk/utils/SamplerArgumentParser.hpp>
 
 template<typename T>
 void writeRDFtoFile(const std::string &filename,
@@ -70,25 +70,13 @@ int main(int argc, char **argv) {
 
     CLI11_PARSE(app, argc, argv);
 
-    for (float maxdist = 0.166016; maxdist <= 0.5; maxdist += 0.0009765625) {
-        utk::Pointset<double> pointset;
-        utk::CustomHeckSampler sampler(criticalFrequency, smoothing, maxdist);
-        sampler.setRandomSeed(args->seed);
+    utk::Pointset<double> pointset;
+    utk::CustomHeckSampler sampler(criticalFrequency, smoothing, 0.1);
+    sampler.setRandomSeed(args->seed);
 
-        std::cout << "generating pointset with " << args->N << " points and maxdist " << maxdist << "…" << std::endl;
-        std::cout << "progress: " << (maxdist / 0.5) * 100 << "%" << std::endl;
-
-        if (!sampler.generateSamples(pointset, args->N)) {
-            std::cerr << "Sampler returned non-zero output" << std::endl; // No log here, must be visible whatsoever
-            return 1;
-        }
-
-        write_text_pointset(fmt::format("pointset_{}.txt", maxdist), pointset);
-
-        std::cout << "generating rdf…" << std::endl;
-
-        auto rdf = utk::RDF{true, 4096, 0.25}.compute(pointset);
-        writeRDFtoFile(fmt::format("rdf_{}.txt", maxdist), rdf);
+    if (!sampler.generateSamples(pointset, args->N)) {
+        std::cerr << "Sampler returned non-zero output" << std::endl;// No log here, must be visible whatsoever
+        return 1;
     }
 
     delete args;

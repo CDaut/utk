@@ -19,7 +19,7 @@ set(UTK_EXE_PREFIX "" CACHE STRING "Prefix for UTK exe (eg. utk_). No spaces nor
 
 option(UTK_USE_OPENMP "Enable USE of OpenMp" ON)
 # FFTW options
-option(UTK_USE_FFTW "Enable use of FFTW" ON)
+option(UTK_USE_FFTW "Enable use of FFTW" OFF)
 # CGal options
 option(UTK_USE_CGAL "Enable projects depending on CGAL. " OFF    )
  
@@ -38,6 +38,7 @@ endif()
 if (UTK_USE_OPENMP)
     include(openmp)
     add_definitions(-DUTK_USE_OPENMP)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 endif()
 
 if (UTK_USE_FFTW)

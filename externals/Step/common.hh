@@ -1,6 +1,6 @@
 //
 // Source code for the paper
-// 
+//
 // D. Heck and T. Schloemer and O. Deussen, "Blue Noise Sampling with
 // Controlled Aliasing", ACM Trans. Graph., 2013, in press
 //
@@ -120,12 +120,12 @@ inline float Integrate(const Curve &c) {
 inline static float Sqr(float x) {
     return x*x;
 }
-  
+
 // Compute toroidal distance between points a and b. Both a and b must
 // lie inside the unit square.
 inline static float DistSqrToroidal(float const *a, float const *b) {
     float dx = a[0]-b[0], dy = a[1]-b[1];
-    return Sqr(dx + (dx < -.5f) - (dx > .5f)) + 
+    return Sqr(dx + (dx < -.5f) - (dx > .5f)) +
         Sqr(dy + (dy < -.5f) - (dy > .5f));
 }
 
@@ -135,9 +135,9 @@ inline static float DistToroidal(float const *a, float const *b) {
 
 // -------------------- RDF calculations --------------------
 
-void CalcRDF(Curve &c, size_t npts, const float *pts, 
+void CalcRDF(Curve &c, size_t npts, const float *pts,
         float (*distfunc)(const float *, const float *) = DistToroidal);
-Curve CalcRDF(int numbins, size_t npts, const float *pts, 
+Curve CalcRDF(int numbins, size_t npts, const float *pts,
         float sigma = 0, float (*distfunc)(const float *, const float *) = DistToroidal);
 
 Curve RDF2Power(int npts, const Curve &rdf, int nbins, float x0, float x1);
@@ -146,7 +146,7 @@ Curve Power2RDF(int npts, const Curve &power, int nbins, float x0, float x1, flo
 
 //
 // Source code for the paper
-// 
+//
 // D. Heck and T. Schloemer and O. Deussen, "Blue Noise Sampling with
 // Controlled Aliasing", ACM Trans. Graph., 2013, in press
 //
@@ -323,7 +323,7 @@ void WritePoints(const std::string &fname, std::vector<heck_Point> &points) {
     }
     //fp << points.size() << "\n";
     for (unsigned i = 0; i < points.size(); i++)
-        fp << points[i].x << " " << points[i].y << "\n"; 
+        fp << points[i].x << " " << points[i].y << "\n";
 }
 
 
@@ -354,7 +354,7 @@ void SavePGM(float *p, int rows, int cols, const char *fname) {
 // -------------------- Curve --------------------
 
 Curve::Curve(const Curve &c) {
-    x0 = c.x0; 
+    x0 = c.x0;
     x1 = c.x1;
     dx = c.dx;
     y = c.y;
@@ -362,7 +362,7 @@ Curve::Curve(const Curve &c) {
 
 Curve::Curve(int size, float x0, float x1) {
     y.resize(size);
-    
+
     this->x0 = x0;
     this->x1 = x1;
     dx = 1.f/size * (x1 - x0);
@@ -413,9 +413,9 @@ void Curve::FilterGauss(const Curve &source, float sigma) {
         y = source.y;
         return;
     }
-  
+
     float dd = (float)source.size() / size();
-  
+
     for (int i=0; i<size(); i++) {
         float a = 0.0f, sumw = 0.0f;
 
@@ -477,7 +477,7 @@ void CalcRDF(Curve &c, size_t npts, const float *pts, float (*distfunc)(const fl
         c[j] = bins[j] / (scale * (2*j+1));
 }
 
-Curve CalcRDF(int numbins, size_t npts, const float *pts, 
+Curve CalcRDF(int numbins, size_t npts, const float *pts,
         float sigma, float (*distfunc)(const float *, const float *))
 {
     Curve c(numbins, 0, 0.5f);

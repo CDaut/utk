@@ -1,9 +1,6 @@
 SET(Metrics
-
         MinDist
-
         TValue
-
         L2Discrepancy
         CenteredL2Discrepancy
         Diaphony
@@ -11,11 +8,9 @@ SET(Metrics
         UnanchoredL2Discrepancy
         SymmetricL2Discrepancy
         BoundariesStarDiscrepancy
-
         Spectrum
         RadialSpectrum
         PCF
-
         RDF_Heck
 )
 

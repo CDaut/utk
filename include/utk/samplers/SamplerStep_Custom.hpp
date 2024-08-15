@@ -33,12 +33,16 @@
 #pragma once
 
 #include "../../../externals/Step/common.hh"
+#include "spdlog/fmt/bundled/format.h"
+#include "utk/metrics/RadialSpectrum.hpp"
+#include "utk/utils/PointsetIO.hpp"
 
-#include <utk/utils/FastPRNG.hpp>
-#include <utk/utils/Pointset.hpp>
-#include <random>
 #include <cmath>
 #include <format>
+#include <iomanip>
+#include <random>
+#include <utk/utils/FastPRNG.hpp>
+#include <utk/utils/Pointset.hpp>
 
 
 #ifndef STEP_COMMON_IMPLEMENTATION
@@ -49,7 +53,7 @@
 #endif
 
 namespace heckOptimized {
-    int nbins = -1;                 // default: number of points
+    int nbins = -1;// default: number of points
     bool randomize_force = false;
     int maxattempts = 5;
     float Tmax = 1, Tmin = 1e-3, Tfactor = 0.9;
@@ -57,14 +61,40 @@ namespace heckOptimized {
     // A flag set on SIGKILL to stop optimization
     bool abort_flag = false;
 
+
+    template<typename T>
+    void writeRadspecToFile(const std::string &filename,
+                            std::pair<std::vector<T>, std::vector<T>> radspec) {
+        std::ofstream file;
+        file.open(filename);
+
+        auto xs = radspec.first;
+        auto ys = radspec.second;
+
+        if (xs.size() != ys.size()) {
+            std::cerr << "Dimensions of radial spactrum are unequal: xDim: "
+                      << xs.size() << " yDim: " << ys.size() << std::endl;
+            std::terminate();
+        }
+
+        for (int i = 0; i < xs.size(); ++i) {
+            file << std::setprecision(std::numeric_limits<long double>::digits10 + 2)
+                 << std::fixed;
+            file << xs[i] << ", " << ys[i] << std::endl;
+        }
+    }
+
     float CalcGradients(const std::vector<heck_Point> &pts,
                         const Curve &rdf, const Curve &target,
                         std::vector<heck_Point> &gradient,
                         int index,
-                        float maxdist) {
+                        float r_tailcorrect,
+                        bool tailcorrect,
+                        const Curve &tailcurve) {
         Curve force(nbins, 0, 0.5f);
 
         //initialize fore curve
+        //Equation 9??
         for (int j = 0; j < force.size(); j++) {
             force[j] = force.dx * (rdf[j] - target[j]);
         }
@@ -84,13 +114,13 @@ namespace heckOptimized {
         float maxforce = 0.0f;
         gradient.resize(pts.size());
 
-#ifdef _OPENMP
-#pragma omp parallel
-#endif
+        //#ifdef _OPENMP
+        //#pragma omp parallel
+        //#endif
         {
-#ifdef _OPENMP
-#pragma omp for schedule(static)
-#endif
+            //#ifdef _OPENMP
+            //#pragma omp for schedule(static)
+            //#endif
             for (uint32_t i = 0; i < pts.size(); i++) {
                 heck_Point grad;
                 for (uint32_t j = 0; j < pts.size(); j++) {
@@ -104,18 +134,20 @@ namespace heckOptimized {
                     dy += (dy < -0.5f) - (dy > 0.5f);
                     float dist2 = dx * dx + dy * dy;
 
-                    //TODO: naive early out
-                    if (dist2 > maxdist) {
-                        continue;
-                    }
-                    //TODO: also plot f
-
+                    float f;
                     // RDF is only reliable up to 0.5, if we go higher, the periodic
                     // boundary conditions cause anisotropies in the final spectrum
                     if (dist2 > 0.49f * 0.49f || dist2 == 0) continue;
-
                     float dist = sqrtf(dist2);
-                    float f = force.At(dist);// / dist;
+
+                    //tail correction or cutoff
+                    if (tailcorrect && dist2 > r_tailcorrect) {
+                        //use tail correction curve
+                        f = tailcurve.At(dist);
+                    } else {
+                        //use force
+                        f = force.At(dist);// / dist;
+                    }
                     grad.x -= dx * f;
                     grad.y -= dy * f;
                 }
@@ -165,18 +197,47 @@ namespace heckOptimized {
                            Curve &target,
                            float smoothing,
                            std::vector<heck_Point> &output,
-                           float maxdist) {
+                           float maxdist,
+                           const Curve &tailcurve) {
 
         std::vector<heck_Point> current = pts, best = pts;
         std::vector<heck_Point> gradient;
         Curve rdf = CalcRDF(nbins, current.size(), &current[0].x, smoothing);
         float bestenergy = CalcEnergy(rdf, target);
-        float T = Tmax;             // temperature
+        float T = Tmax;// temperature
         int attempts = 0;
         int i = 0;
         while (!abort_flag && T >= Tmin) {
             // Calculate gradients and move points
-            float maxgrad = CalcGradients(current, rdf, target, gradient, i, maxdist);
+            float maxgrad = CalcGradients(current,
+                                          rdf,
+                                          target,
+                                          gradient,
+                                          i,
+                                          maxdist,
+                                          false,
+                                          tailcurve);
+
+            /////////////////////////////////
+            std::ofstream forces;
+            forces.open(fmt::format("forces_{}.txt", i));
+            //dump gradients
+            for (size_t index = 0; index < gradient.size(); index++) {
+                heck_Point grad_i = gradient[index];
+                heck_Point point_i = current[index];
+                forces << point_i.x << " " << point_i.y << " " << grad_i.x << " " << grad_i.y << std::endl;
+            }
+
+            forces.close();
+
+            std::ofstream pointset;
+            pointset.open(fmt::format("pointset_{}.txt", i));
+            for (const auto &item: current) {
+                pointset << item.x << " " << item.y << std::endl;
+            }
+            pointset.close();
+            /////////////////////////////////////////////
+
             float stepsize = T / (sqrt(current.size()) * maxgrad);
             current = MovePoints(current, gradient, stepsize);
 
@@ -193,8 +254,8 @@ namespace heckOptimized {
                 current = best;
             }
 
-            //std::cout << "T: " << T << " stepsize: " << stepsize << " energy: " << energy << " bestenergy: "
-            //          << bestenergy << std::endl;
+            std::cout << "T: " << T << " stepsize: " << stepsize << " energy: " << energy << " bestenergy: "
+                      << bestenergy << std::endl;
 
             if (attempts >= maxattempts) {
                 attempts = 0;
@@ -240,19 +301,17 @@ namespace heckOptimized {
         }
     }
 
-}
+}// namespace heckOptimized
 
-#endif //  STEP_COMMON_IMPLEMENTATION
+#endif//  STEP_COMMON_IMPLEMENTATION
 
 namespace utk {
 
     class CustomHeckSampler {
     protected:
     public:
-
-        explicit CustomHeckSampler(float critFreq = 0.606f, float smooth = 8.f, float maxdist = 1.f) :
-                critFrequency(critFreq),
-                smoothing(smooth), maxdist(maxdist) { setRandomSeed(); }
+        explicit CustomHeckSampler(float critFreq = 0.606f, float smooth = 8.f, float maxdist = 1.f) : critFrequency(critFreq),
+                                                                                                       smoothing(smooth), maxdist(maxdist) { setRandomSeed(); }
 
         [[nodiscard]] uint32_t GetDimension() const { return 2; }
 
@@ -281,9 +340,11 @@ namespace utk {
             Curve target(heckOptimized::nbins, 0, 0.5f);
             heckOptimized::FunctionJinc(critFrequency, target, (int) pts.size());
 
+            //initialize the tailcurve with all zeroes (this is a hard cutoff)
+            Curve tailcurve(heckOptimized::nbins, 0, 0.5f);
 
             result = pts;
-            heckOptimized::MainOptimization(pts, target, smoothing, result, maxdist);
+            heckOptimized::MainOptimization(pts, target, smoothing, result, maxdist, tailcurve);
 
             arg_pts.Resize(N, 2);
             for (uint32_t i = 0; i < N; i++) {
@@ -301,4 +362,4 @@ namespace utk {
         float maxdist;
     };
 
-}
+}// namespace utk

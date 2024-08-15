@@ -4,15 +4,18 @@
 
 #ifndef UNICORNTK_RDF_HECK_HPP
 #define UNICORNTK_RDF_HECK_HPP
+#include "utk/utils/Pointset.hpp"
+#include <cmath>
+#include <cstdint>
+#include <vector>
+
 namespace utk {
     class RDF {
     public:
-
         explicit RDF(
                 bool toroidal = true,
                 int32_t nbins = 1024,
-                float_t maxdist = 0.25
-        ) : nbins(nbins), toroidal(toroidal), maxdist(maxdist) {
+                float_t maxdist = 0.25) : nbins(nbins), toroidal(toroidal), maxdist(maxdist) {
             if (nbins == 0) {
                 this->nbins = 1024;
             }
@@ -58,7 +61,6 @@ namespace utk {
         }
 
     private:
-
         int32_t nbins;
         bool toroidal;
         float_t maxdist;
@@ -84,5 +86,5 @@ namespace utk {
             return std::sqrt(dist);
         }
     };
-}
-#endif //UNICORNTK_RDF_HECK_HPP
+}// namespace utk
+#endif//UNICORNTK_RDF_HECK_HPP

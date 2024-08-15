@@ -34,10 +34,10 @@
 
 #include <SinglePeak/common.hh>
 
-#include <utk/utils/FastPRNG.hpp>
-#include <utk/utils/Pointset.hpp>
 #include <cmath>
 #include <random>
+#include <utk/utils/FastPRNG.hpp>
+#include <utk/utils/Pointset.hpp>
 
 #ifndef STEP_COMMON_IMPLEMENTATION
 #define STEP_COMMON_IMPLEMENTATION 
