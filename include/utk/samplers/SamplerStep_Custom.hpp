@@ -33,12 +33,10 @@
 #pragma once
 
 #include "../../../externals/Step/common.hh"
-#include "spdlog/fmt/bundled/format.h"
 #include "utk/metrics/RadialSpectrum.hpp"
 #include "utk/utils/PointsetIO.hpp"
 
 #include <cmath>
-#include <format>
 #include <iomanip>
 #include <random>
 #include <utk/utils/FastPRNG.hpp>
@@ -50,9 +48,19 @@
 
 #ifdef _OPENMP
 #include <omp.h>
+#include <optional>
 #endif
 
 namespace heckOptimized {
+
+    struct PointWithDistance {
+        float_t contrib;
+        float_t distance;
+
+        explicit PointWithDistance(float_t contrib = 0.f, float_t dist = -1.f) : contrib(contrib), distance(dist) {}
+    };
+
+
     int nbins = -1;// default: number of points
     bool randomize_force = false;
     int maxattempts = 5;
@@ -114,6 +122,10 @@ namespace heckOptimized {
         float maxforce = 0.0f;
         gradient.resize(pts.size());
 
+        //remember how much each point contributed towards the overall force
+        auto pointContributions = std::vector<std::vector<PointWithDistance>>{};
+        pointContributions.resize(pts.size());
+
         //#ifdef _OPENMP
         //#pragma omp parallel
         //#endif
@@ -123,6 +135,10 @@ namespace heckOptimized {
             //#endif
             for (uint32_t i = 0; i < pts.size(); i++) {
                 heck_Point grad;
+
+                //initialize histogramm
+                //pointContributions[i] = std::vector<PointWithDistance>{};
+
                 for (uint32_t j = 0; j < pts.size(); j++) {
                     if (i == j)
                         continue;
@@ -141,7 +157,7 @@ namespace heckOptimized {
                     float dist = sqrtf(dist2);
 
                     //tail correction or cutoff
-                    if (tailcorrect && dist2 > r_tailcorrect) {
+                    if (tailcorrect && dist > r_tailcorrect) {
                         //use tail correction curve
                         f = tailcurve.At(dist);
                     } else {
@@ -150,13 +166,37 @@ namespace heckOptimized {
                     }
                     grad.x -= dx * f;
                     grad.y -= dy * f;
+
+                    // put the strength (2-Norm) contributing point into the histogram
+                    //pointContributions[i].emplace_back(std::sqrt((dx * f * dx * f) + (dy * f * dy * f)), dist);
                 }
                 float ff = grad.x * grad.x + grad.y * grad.y;
                 if (ff > maxforce)
                     maxforce = ff;
                 gradient[i] = grad;
+
+                //sort the point contributions by distance
+//                std::sort(pointContributions[i].begin(), pointContributions[i].end(), [](auto a, auto b) {
+//                    return a.distance < b.distance;
+//                });
             }
         }
+
+        ///////////////////////////
+//        //dump the whole contribution matrix
+//        std::ofstream contributions;
+//        contributions.open(fmt::format("contribution_histogram{}.hst", index));
+//
+//        int i = 0;
+//        for (const auto &contrib: pointContributions) {
+//            contributions << i++ << std::endl;
+//            for (const auto &pointContrib: contrib) {
+//                contributions << pointContrib.distance << " " << pointContrib.contrib << std::endl;
+//            }
+//        }
+//        contributions.close();
+        ///////////////////////////
+
         return sqrtf(maxforce);
     }
 
@@ -198,7 +238,8 @@ namespace heckOptimized {
                            float smoothing,
                            std::vector<heck_Point> &output,
                            float maxdist,
-                           const Curve &tailcurve) {
+                           const Curve &tailcurve,
+                           const bool tailcorrect) {
 
         std::vector<heck_Point> current = pts, best = pts;
         std::vector<heck_Point> gradient;
@@ -215,27 +256,27 @@ namespace heckOptimized {
                                           gradient,
                                           i,
                                           maxdist,
-                                          false,
+                                          tailcorrect,
                                           tailcurve);
 
             /////////////////////////////////
-            std::ofstream forces;
-            forces.open(fmt::format("forces_{}.txt", i));
-            //dump gradients
-            for (size_t index = 0; index < gradient.size(); index++) {
-                heck_Point grad_i = gradient[index];
-                heck_Point point_i = current[index];
-                forces << point_i.x << " " << point_i.y << " " << grad_i.x << " " << grad_i.y << std::endl;
-            }
-
-            forces.close();
-
-            std::ofstream pointset;
-            pointset.open(fmt::format("pointset_{}.txt", i));
-            for (const auto &item: current) {
-                pointset << item.x << " " << item.y << std::endl;
-            }
-            pointset.close();
+            //            std::ofstream forces;
+            //            forces.open(fmt::format("forces_{}.txt", i));
+            //            //dump gradients
+            //            for (size_t index = 0; index < gradient.size(); index++) {
+            //                heck_Point grad_i = gradient[index];
+            //                heck_Point point_i = current[index];
+            //                forces << point_i.x << " " << point_i.y << " " << grad_i.x << " " << grad_i.y << std::endl;
+            //            }
+            //
+            //            forces.close();
+            //
+            //            std::ofstream pointset;
+            //            pointset.open(fmt::format("pointset_{}.txt", i));
+            //            for (const auto &item: current) {
+            //                pointset << item.x << " " << item.y << std::endl;
+            //            }
+            //            pointset.close();
             /////////////////////////////////////////////
 
             float stepsize = T / (sqrt(current.size()) * maxgrad);
@@ -254,8 +295,8 @@ namespace heckOptimized {
                 current = best;
             }
 
-            std::cout << "T: " << T << " stepsize: " << stepsize << " energy: " << energy << " bestenergy: "
-                      << bestenergy << std::endl;
+//            std::cout << "T: " << T << " stepsize: " << stepsize << " energy: " << energy << " bestenergy: "
+//                      << bestenergy << std::endl;
 
             if (attempts >= maxattempts) {
                 attempts = 0;
@@ -310,8 +351,17 @@ namespace utk {
     class CustomHeckSampler {
     protected:
     public:
-        explicit CustomHeckSampler(float critFreq = 0.606f, float smooth = 8.f, float maxdist = 1.f) : critFrequency(critFreq),
-                                                                                                       smoothing(smooth), maxdist(maxdist) { setRandomSeed(); }
+        explicit CustomHeckSampler(float critFreq = 0.606f,
+                                   float smooth = 8.f,
+                                   float maxdist = 1.f,
+                                   bool tailcorrect = false,
+                                   const Curve &mediancurve = Curve{},
+                                   bool hardCutoff = false) : critFrequency(critFreq),
+                                                              smoothing(smooth),
+                                                              maxdist(maxdist),
+                                                              do_tailcorrection(tailcorrect),
+                                                              mediancurve(mediancurve),
+                                                              hardCutoff(hardCutoff) { setRandomSeed(); }
 
         [[nodiscard]] uint32_t GetDimension() const { return 2; }
 
@@ -341,10 +391,26 @@ namespace utk {
             heckOptimized::FunctionJinc(critFrequency, target, (int) pts.size());
 
             //initialize the tailcurve with all zeroes (this is a hard cutoff)
-            Curve tailcurve(heckOptimized::nbins, 0, 0.5f);
+            const int nbinsTailcurve = 512;
+            Curve tailcurve(nbinsTailcurve, maxdist, 0.5);
+
+            if (!hardCutoff && do_tailcorrection) {
+                const float zeroPoint = 0.25;
+                const float yAtTailBegin = mediancurve.At(maxdist);
+                const float linear_correction_m = (-yAtTailBegin) / (zeroPoint - maxdist);
+                const int nBinsTailNonzero = std::floor((zeroPoint - maxdist) / (0.5 - maxdist) * nbinsTailcurve);
+                const float tailcurveDxUntilZero = (zeroPoint - maxdist) / nBinsTailNonzero;
+
+                //fill tailcurve linearly
+                for (int i = 0; i < tailcurve.ToIndex(zeroPoint); ++i) {
+                    tailcurve[i] = linear_correction_m * i * tailcurveDxUntilZero + yAtTailBegin;
+                }
+            }
+
+            //tailcurve.Write(fmt::format("tailcurve_{}.crv", maxdist));
 
             result = pts;
-            heckOptimized::MainOptimization(pts, target, smoothing, result, maxdist, tailcurve);
+            heckOptimized::MainOptimization(pts, target, smoothing, result, maxdist, tailcurve, do_tailcorrection);
 
             arg_pts.Resize(N, 2);
             for (uint32_t i = 0; i < N; i++) {
@@ -360,6 +426,9 @@ namespace utk {
         float critFrequency;
         float smoothing;
         float maxdist;
+        bool do_tailcorrection;
+        const Curve &mediancurve;
+        const bool hardCutoff;
     };
 
 }// namespace utk

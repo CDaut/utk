@@ -70,13 +70,19 @@ int main(int argc, char **argv) {
 
     CLI11_PARSE(app, argc, argv);
 
-    utk::Pointset<double> pointset;
-    utk::CustomHeckSampler sampler(criticalFrequency, smoothing, 0.1);
-    sampler.setRandomSeed(args->seed);
+    Curve mediancurve = Curve::Read("/home/clara/repositorys/vk_raytracing_tutorial_KHR/utk_experiments/result_data/median_force_curve.txt");
 
-    if (!sampler.generateSamples(pointset, args->N)) {
-        std::cerr << "Sampler returned non-zero output" << std::endl;// No log here, must be visible whatsoever
-        return 1;
+    for (int i = 6; i < 20; ++i) {
+        std::cout << "generating pointset " << i << std::endl;
+        utk::Pointset<double> pointset;
+        utk::CustomHeckSampler sampler(criticalFrequency, smoothing, 0.2, false, mediancurve, true);
+        sampler.setRandomSeed(i);
+
+        if (!sampler.generateSamples(pointset, 16384)) {
+            std::cerr << "Sampler returned non-zero output" << std::endl;// No log here, must be visible whatsoever
+            return 1;
+        }
+        utk::write_text_pointset(fmt::format("pointsets_16384_02/pointset_{}.txt", i), pointset);
     }
 
     delete args;
